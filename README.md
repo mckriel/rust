@@ -6,9 +6,10 @@
 
 ### High level flow diagram
 [Excalidraw whiteboard](https://link.excalidraw.com/readonly/4OawDcboWIFdRuIeU3ns?darkMode=true)
+
 ![image](https://github.com/user-attachments/assets/588775c4-9cf8-4352-85fb-af89d99de0ae)
 
-### Crates
+### Crates used
 * console
 * dialoguer
 * rusqlite
