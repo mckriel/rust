@@ -1,21 +1,23 @@
-mod todo;
-use crossterm::{execute, terminal::{Clear, ClearType}};
-use std::io::stdout;
 use anyhow::Result;
 use console::Emoji;
-use dialoguer::{theme::ColorfulTheme, Input, Select};
+use dialoguer::{theme::ColorfulTheme, Select};
 use rusqlite::Connection;
-use todo::ToDoItem;
+
+mod modules;
+
+use crate::modules::ui::{ display_tasks, prompt_task_id, prompt_task_title };
+use crate::modules::utils::clear_console;
+use modules::todo::ToDoItem;
 
 fn display_menu() -> Result<()> {
     // open the database if exists, if not create it
     let conn = Connection::open("todo_list.db")?;
-    todo::ToDoItem::create_table(&conn)?;
-    
+    ToDoItem::create_table(&conn)?;
+    // main loop to keep propgram running
     loop {
         clear_console()?;
-        let (tasks_incomplete, tasks_complete) = todo::ToDoItem::task_fetch_all_by_completion(&conn)?;
-    
+
+        let (tasks_incomplete, tasks_complete) = ToDoItem::task_fetch_all_by_completion(&conn)?;
         println!("\n--- {} TODO LIST ---\n", Emoji("✅", ""));
         display_tasks(tasks_incomplete, tasks_complete);
         
@@ -35,180 +37,48 @@ fn display_menu() -> Result<()> {
             .interact()?;
 
         match selection {
-            // 1. Add a task
-            0 => {
-                let title: String = Input::new()
-                    .with_prompt("Enter task title: ")
-                    .interact_text()?;
-                todo::ToDoItem::task_insert(&conn, &title)?;
-                println!("Task added.")
-            }
-            // 2. Complete a task
-            1 => {
-                let task_id: String = Input::new()
-                    .with_prompt("Enter task ID: ")
-                    .interact_text()?;
-
-                let task_id: u64 = task_id.trim()
-                    .parse::<u64>()
-                    .unwrap_or_else(|_|0_u64);
-
-                todo::ToDoItem::task_mark_complete(&conn, task_id)?;
-            }
-            // 3. Update a task
-            2 => {
-                let task_id: String = Input::new()
-                    .with_prompt("Enter task ID: ")
-                    .interact_text()?;
-
-                let task_id: u64 = task_id.trim()
-                    .parse::<u64>()
-                    .unwrap_or_else(|_|0_u64);
-
-                let mut task = match todo::ToDoItem::task_fetch_by_id(&conn, task_id) {
-                    Some(t) => t,
-                    None => {
-                        println!("Task with ID {} not found", task_id);
-                        return Ok(());
-                    }
-                };
-
-                let new_title: String = Input::new()
-                    .with_prompt("Enter new task title: ")
-                    .interact_text()?;
-
-                task.title = new_title.clone();
-                todo::ToDoItem::task_update_title(&conn, task_id, &new_title.as_str())?;
-            }
-            // 4. Delete a task
-            3 => {
-                let task_id: String = Input::new()
-                    .with_prompt("Enter task ID: ")
-                    .interact_text()?;
-
-                let task_id: u64 = task_id.trim()
-                    .parse::<u64>()
-                    .unwrap_or_else(|_|0_u64);
-
-                todo::ToDoItem::task_delete(&conn, task_id)?;
-            }
-            _ => println!("some shit")
-            
+            0 => add_task(&conn)?,
+            1 => complete_task(&conn)?,
+            2 => update_task(&conn)?,
+            3 => delete_task(&conn)?,
+            4 => std::process::exit(0),
+            _ => println!()
         }
     }
 }
 
-
-fn display_task_list(tasks: Vec<ToDoItem>, title: &str) {
-    println!("{}", title);
-    if tasks.is_empty() {
-        println!("Task list empty \n");
-    } else {
-        for task in tasks {
-            let completed_status = if task.completed { "[X]" } else { "[ ]"};
-            println!("{} | {} | {}", completed_status, task.id, task.title);
-        }
-        println!()
-    }
-}
-
-fn display_tasks(incomplete_tasks: Vec<ToDoItem>, complete_tasks: Vec<ToDoItem>) {
-    display_task_list(incomplete_tasks, "-- Outstanding Tasks");
-    display_task_list(complete_tasks, "-- Completed Tasks --");
-}
-
-fn clear_console() -> Result<()> {
-    execute!(stdout(), Clear(ClearType::All))?;
+fn add_task(conn: &Connection) -> Result<()> {
+    let title = prompt_task_title("Enter task title: ");
+    ToDoItem::task_insert(conn, &title?)?;
     Ok(())
 }
 
+fn complete_task(conn: &Connection) -> Result<()> {
+    let task_id = prompt_task_id("Enter task ID to mark as complete: ")?;
+    ToDoItem::task_mark_complete(conn, task_id)?;
+    Ok(())
+}
+
+fn update_task(conn: &Connection) -> Result<()> {
+    let task_id = prompt_task_id("Enter task ID to update: ")?;
+    if let Some(mut task) = ToDoItem::task_fetch_by_id(conn, task_id) {
+        let new_title = prompt_task_title("Enter new task title: ")?;
+        task.title = new_title.clone();
+        ToDoItem::task_update_title(conn, task_id, &new_title)?;
+    } else {
+        println!("Task with ID {} not found", task_id);
+    }
+    Ok(())
+}
+
+fn delete_task(conn: &Connection) -> Result<()> {
+    let task_id = prompt_task_id("Enter task ID to delete: ")?;
+    ToDoItem::task_delete(conn, task_id)?;
+    println!("Task deleted.");
+    Ok(())
+}
 
 fn main() -> Result<()>{
     display_menu()?;
     Ok(())
 }
-
-
-
-    // let mut todo_list = todo::TodoList::new();
-
-    // println!("{} {}", Emoji("✅", ""), style(" Your TODO list").green(),);
-
-    // let input: String = Input::with_theme(&ColorfulTheme::default())
-    //     .with_prompt("Please enter a menu choice:")
-    //     .interact_text()
-    //     .unwrap();
-
-    // println!("Email: {}", input);
-
-    // let mail: String = Input::with_theme(&ColorfulTheme::default())
-    // .with_prompt("Your planet")
-    // .default("Earth".to_string())
-    // .interact_text()
-    // .unwrap();
-
-    // println!("Planet: {}", mail);
-
-    
-    // loop {
-    //     println!("");
-    //     println!("============================");
-    //     println!(" My TODO app");
-    //     println!("============================");
-    //     println!("1. Add item");
-    //     println!("2. List items");
-    //     println!("3. Complete item");
-    //     println!("4. Exit");
-    //     println!("============================");
-
-
-    //     println!("Enter menu choice: ");
-
-
-
-    //     let mut choice = String::new();
-    //     io::stdin().read_line(&mut choice).expect("Incorrect input");
-    //     let choice: u32 = match choice.trim().parse() {
-    //         Ok(num) => num,
-    //         Err(_) => continue
-    //     };
-    //     println!("============================");
-    //     println!("");
-
-
-    //     match choice {
-    //         1 => {
-    //             println!("============================");
-    //             println!("Enter the tile of the new item: ");
-    //             let mut title = String::new();
-    //             io::stdin().read_line(&mut title).expect("Failed to read line");
-    //             todo_list.add_item(title.trim().to_string());
-    //             // println!("============================");
-    //             println!("");
-
-
-    //         }
-    //         2 => {
-    //             todo_list.list_items();
-    //         }
-    //         3 => {
-    //             todo_list.list_items();
-    //             println!("Enter the ID of the completed item: ");
-    //             let mut id = String::new();
-    //             io::stdin().read_line(&mut id).expect("Failed to read line");
-                
-    //             let id: u64 = match id.trim().parse() {
-    //                 Ok(num) => num,
-    //                 Err(_) => continue
-    //             };
-    //             todo_list.complete_item(id);
-    //         }
-    //         4 => {
-    //             println!("Exiting the program");
-    //             break;
-    //         }
-    //         _ => {
-    //             println!("Invalid choice, please enter a number between 1 and 4...")
-    //         }
-    //     }
-    // }
