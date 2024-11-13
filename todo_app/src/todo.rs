@@ -1,5 +1,7 @@
 use core::task;
 
+// use anyhow::Ok;
+// use anyhow::Ok;
 use rusqlite::{params, Connection, Result };
 
 pub struct ToDoItem {
@@ -30,8 +32,10 @@ impl ToDoItem {
         )?;
         Ok(())
     }
+
     // fetch all the tasks in the sqlite database
-    pub fn task_fetch_all(conn: &Connection) -> Result<Vec<ToDoItem>> {
+    // returns two vectors - one with completed tasks, one with incomplete tasks
+    pub fn task_fetch_all_by_completion(conn: &Connection) -> Result<(Vec<ToDoItem>, Vec<ToDoItem>)> {
         let mut stmt = conn.prepare(
             "SELECT id, title, completed FROM todo_item"
         )?;
@@ -43,11 +47,39 @@ impl ToDoItem {
             })
         })?;
 
-        let mut items = Vec::new();
+        let mut completed_tasks = Vec::new();
+        let mut incomplete_tasks = Vec::new();
+
         for item in todo_iter {
-            items.push(item?);
+            let task: ToDoItem = item?;
+            if task.completed {
+                completed_tasks.push(task);
+            }
+            else {
+                incomplete_tasks.push(task);
+            }
         }
-        Ok(items)
+        Ok((incomplete_tasks, completed_tasks))
+    }
+
+    pub fn task_fetch_by_id(conn: &Connection, task_id: u64) -> Option<ToDoItem> {
+        let mut stmt = conn.prepare(
+            "SELECT id, title, completed FROM todo_item WHERE id = ?1"
+        ).expect("Failed to prepare statement");
+        
+        let task_iter = stmt.query_map(params![task_id], |row| {
+            Ok(ToDoItem {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                completed: row.get(2)?,
+            })
+        }).expect("Failed");
+
+        for task in task_iter {
+            return Some(task.expect("Failed"));
+        }
+
+        None
     }
 
     pub fn task_mark_complete(conn: &Connection, task_id: u64) -> Result<()> {
@@ -62,8 +94,8 @@ impl ToDoItem {
         conn.execute(
             "UPDATE todo_item SET title = ?1 WHERE id = ?2", 
         params![new_title, task_id],
-    )?;
-    Ok(())
+        )?;
+        Ok(())
     }
 
     pub fn task_delete(conn: &Connection, task_id: u64) -> Result<()> {
