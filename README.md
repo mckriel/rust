@@ -1,5 +1,7 @@
 # My Rust Repo
 
+All my apps have easter eggs in them for you to find and hopefully have a laugh at ;)
+
 ## TODO App
 * A simple task list app which runs in the command line
 * Makes use of a sqlite database to store, retrieve and edit tasks
