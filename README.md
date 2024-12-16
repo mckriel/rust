@@ -17,3 +17,6 @@ All my apps have easter eggs in them for you to find and hopefully have a laugh 
 * rusqlite
 * anyhow
 * crossterm
+
+
+test
